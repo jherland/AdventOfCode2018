@@ -2,18 +2,12 @@
 
 from collections import Counter
 
+from utils import first_dup
+
 
 def removeNthChar(n, words):
     for word in words:
         yield word[:n] + word[n + 1:]
-
-
-def first_dup(values):
-    seen = set()
-    for v in values:
-        if v in seen:
-            return v
-        seen.add(v)
 
 
 with open('02.input') as f:

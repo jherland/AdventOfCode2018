@@ -2,11 +2,7 @@
 
 from itertools import cycle
 
-
-def shifts():
-    with open('01.input') as f:
-        for line in f:
-            yield int(line)
+from utils import first_dup
 
 
 def shifted(shifts, start=0):
@@ -16,16 +12,11 @@ def shifted(shifts, start=0):
         yield start
 
 
-def first_dup(values):
-    seen = set()
-    for v in values:
-        if v in seen:
-            return v
-        seen.add(v)
-
+with open('01.input') as f:
+    shifts = [int(line) for line in f]
 
 # part 1
-print(sum(shifts()))
+print(sum(shifts))
 
 # part 2
-print(first_dup(shifted(cycle(shifts()))))
+print(first_dup(shifted(cycle(shifts))))
