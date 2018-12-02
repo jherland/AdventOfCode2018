@@ -13,13 +13,8 @@ class Claim:
 
     @classmethod
     def parse(cls, s):
-        id, at, loc, size = s.split()
-        assert id.startswith('#')
-        assert at == '@'
-        assert loc.endswith(':')
-        x, y = loc[:-1].split(',')
-        w, h = size.split('x')
-        return cls(int(id[1:]), int(x), int(y), int(w), int(h))
+        return cls(
+            *map(int, s.translate(str.maketrans(',x', '  ', '#@:')).split()))
 
     def coords(self):
         for i in range(self.x, self.x + self.w):
