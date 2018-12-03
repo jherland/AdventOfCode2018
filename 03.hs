@@ -5,7 +5,6 @@
 
 import Data.Maybe (catMaybes)
 import Text.Read (readMaybe)
-import Data.List.Split (splitOn)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import qualified Data.IntSet as IntSet
@@ -18,19 +17,17 @@ data Claim = Claim {
     h :: Int }
     deriving Show
 
+translate :: ([Char], [Char], [Char]) -> String -> String
+translate (from, to, remove) s = foldr xlate "" s where
+    xlate c s' =
+        if elem c remove then s'
+        else if elem c from then [t | (f, t) <- zip from to, f == c] ++ s'
+             else (c : s')
+
 parse :: String -> Maybe Claim -- "#{id} @ {x},{y}: {w}x{h}"
-parse s = go $ splitOn " " s where
-    go [_id, "@", loc, size] = buildClaim (parseId _id) (parseLoc $ splitOn "," loc) (parseSize $ splitOn "x" size) where
-        parseId ('#' : id') = readMaybe id' :: Maybe Int
-        parseId _ = Nothing
-        parseLoc [x', y'_] = (readMaybe x' :: Maybe Int, readMaybe y' :: Maybe Int) where
-            y' = head $ splitOn ":" y'_
-        parseLoc _ = (Nothing, Nothing)
-        parseSize [w', h'] = (readMaybe w' :: Maybe Int, readMaybe h' :: Maybe Int)
-        parseSize _ = (Nothing, Nothing)
-        buildClaim (Just id'') ((Just x''), (Just y'')) ((Just w''), (Just h'')) = Just (Claim id'' x'' y'' w'' h'')
-        buildClaim _ _ _ = Nothing
-    go _ = Nothing
+parse s = buildClaim $ catMaybes $ map readMaybe $ words $ translate (",x", "  ", "#@:") s where
+    buildClaim [id_', x', y', w', h'] = Just (Claim id_' x' y' w' h')
+    buildClaim _ = Nothing
 
 type Coord = (Int, Int)
 type Ids = [Int]
