@@ -12,13 +12,12 @@ process :: [Char] -> [Char]
 process = go [] where
     go rwd [] = reverse rwd
     go [] (f : fwd) = go [f] fwd
-    go (r : rwd) (f : fwd) = if react r f then go rwd fwd else go (f : r : rwd) fwd
+    go (r : rwd) (f : fwd)
+        | react r f = go rwd fwd
+        | otherwise = go (f : r : rwd) fwd
 
 remove :: Char -> [Char] -> [Char]
 remove x = filter (\c -> toUpper c /= toUpper x)
-
-processedLengthWithRemovedChar :: Char -> [Char] -> Int
-processedLengthWithRemovedChar x = length . process . remove x
 
 main :: IO ()
 main = do
@@ -28,5 +27,4 @@ main = do
     let reacted = process polymer
     print $ length reacted
     -- part 2
-    let lengths = map (flip processedLengthWithRemovedChar $ polymer) ['a'..'z']
-    print $ minimum lengths
+    print $ minimum [length $ process $ remove x polymer | x <- ['a'..'z']]
