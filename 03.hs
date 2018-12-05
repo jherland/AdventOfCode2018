@@ -22,7 +22,7 @@ translate (from, to, remove) s = foldr xlate "" s where
     xlate c s' =
         if elem c remove then s'
         else if elem c from then [t | (f, t) <- zip from to, f == c] ++ s'
-             else (c : s')
+             else c : s'
 
 parse :: String -> Maybe Claim -- "#{id} @ {x},{y}: {w}x{h}"
 parse = buildClaim . catMaybes . map readMaybe . words . translate (",x", "  ", "#@:") where
