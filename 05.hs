@@ -10,7 +10,7 @@ react a b = (a /= b) && (toUpper a == toUpper b)
 
 process :: [Char] -> [Char]
 process = go [] where
-    go rwd [] = reverse rwd
+    go rwd [] = rwd
     go [] (f : fwd) = go [f] fwd
     go (r : rwd) (f : fwd)
         | react r f = go rwd fwd
