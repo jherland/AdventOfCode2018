@@ -25,7 +25,7 @@ translate (from, to, remove) s = foldr xlate "" s where
              else (c : s')
 
 parse :: String -> Maybe Claim -- "#{id} @ {x},{y}: {w}x{h}"
-parse s = buildClaim $ catMaybes $ map readMaybe $ words $ translate (",x", "  ", "#@:") s where
+parse = buildClaim . catMaybes . map readMaybe . words . translate (",x", "  ", "#@:") where
     buildClaim [id_', x', y', w', h'] = Just (Claim id_' x' y' w' h')
     buildClaim _ = Nothing
 
@@ -39,7 +39,7 @@ insertCoord id' coord m = Map.alter append coord m where
 
 insertClaim :: Claim -> Map Coord Ids -> Map Coord Ids
 insertClaim claim m = foldr (insertCoord (id_ claim)) m coords where
-    coords = [(i, j) | i <- enumFromTo start_x end_x, j <- enumFromTo start_y end_y]
+    coords = [(i, j) | i <- [start_x .. end_x], j <- [start_y .. end_y]]
     start_x = x claim
     end_x = start_x + (w claim) - 1
     start_y = y claim
