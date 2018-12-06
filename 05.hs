@@ -5,15 +5,15 @@
 
 import Data.Char (toUpper)
 
-react :: Char -> Char -> Bool
-react a b = (a /= b) && (toUpper a == toUpper b)
+reactive :: Char -> Char -> Bool
+reactive a b = (a /= b) && (toUpper a == toUpper b)
 
-process :: [Char] -> [Char]
-process = go [] where
+react :: [Char] -> [Char]
+react = go [] where
     go rwd [] = rwd
     go [] (f : fwd) = go [f] fwd
     go (r : rwd) (f : fwd)
-        | react r f = go rwd fwd
+        | reactive r f = go rwd fwd
         | otherwise = go (f : r : rwd) fwd
 
 remove :: Char -> [Char] -> [Char]
@@ -24,7 +24,7 @@ main = do
     input <- readFile "05.input"
     let polymer = head $ lines input
     -- part 1
-    let reacted = process polymer
+    let reacted = react polymer
     print $ length reacted
     -- part 2
-    print $ minimum [length $ process $ remove x polymer | x <- ['a'..'z']]
+    print $ minimum [length $ react $ remove x polymer | x <- ['a'..'z']]
