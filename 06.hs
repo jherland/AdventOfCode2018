@@ -17,7 +17,7 @@ digits = read <$> many1 (satisfy isDigit)
 coord :: ReadP Coord
 coord = do
     x <- digits
-    y <- string ", " >> digits
+    y <- string ", " >> digits <* eof
     return (x, y)
 
 parse :: [String] -> [Coord]
@@ -41,7 +41,7 @@ nearest p coords = go p (mhdist p (head coords), []) coords where
             GT -> go p' (lowdist, cands) cs
 
 -- Given point p and a list of points c, return the sum of distances from
--- p to all c
+-- p to each c
 distToAll :: Coord -> [Coord] -> Int
 distToAll p = sum . map (mhdist p)
 
@@ -88,7 +88,7 @@ areas coords grid = go coords grid Map.empty where
 main :: IO ()
 main = do
     input <- readFile "06.input"
---    let input = "1, 1\n1, 6\n8, 3\n3, 4\n5, 5\n8, 9\n"
+    -- let input = "1, 1\n1, 6\n8, 3\n3, 4\n5, 5\n8, 9\n"
     let coords = parse $ lines input
     let box = bounds coords
     -- part 1
@@ -98,7 +98,5 @@ main = do
     let maxArea = maximum $ map snd $ Map.toList finiteAreas
     print maxArea
     -- part 2
-    let region = filter (\d -> fst d < 32) $ map (\p -> (distToAll p coords, p)) $ inside box
-    print region
+    let region = filter (<10000) . map ((flip distToAll) coords) $ inside box
     print $ length region
-    -- print $ length $ filter (\d -> d < 10000) $ map (\p -> distToAll p coords) $ inside box
