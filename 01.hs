@@ -3,17 +3,16 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
-import Text.Read (readMaybe)
 import qualified Data.IntSet as IntSet
+import Data.Maybe (fromMaybe)
+import Text.Read (readMaybe)
 
 parse :: String -> Int
 parse ('+' : val) = parse val
-parse val = case readMaybe val :: Maybe Int of
-    Just num -> num
-    Nothing -> 0
+parse val = fromMaybe 0 (readMaybe val)
 
 firstDup :: [Int] -> Int
-firstDup ints = go IntSet.empty ints where
+firstDup = go IntSet.empty where
     go s (n : ns) = if IntSet.member n s then n else go (IntSet.insert n s) ns
     go _ _ = undefined
 

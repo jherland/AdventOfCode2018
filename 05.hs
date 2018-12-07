@@ -8,7 +8,7 @@ import Data.Char (toUpper)
 reactive :: Char -> Char -> Bool
 reactive a b = (a /= b) && (toUpper a == toUpper b)
 
-react :: [Char] -> [Char]
+react :: String -> String
 react = go [] where
     go rwd [] = rwd
     go [] (f : fwd) = go [f] fwd
@@ -16,7 +16,7 @@ react = go [] where
         | reactive r f = go rwd fwd
         | otherwise = go (f : r : rwd) fwd
 
-remove :: Char -> [Char] -> [Char]
+remove :: Char -> String -> String
 remove x = filter (\c -> toUpper c /= toUpper x)
 
 main :: IO ()

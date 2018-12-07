@@ -98,5 +98,5 @@ main = do
     let maxArea = maximum $ map snd $ Map.toList finiteAreas
     print maxArea
     -- part 2
-    let region = filter (<10000) . map ((flip distToAll) coords) $ inside box
+    let region = filter (<10000) . map (`distToAll` coords) $ inside box
     print $ length region

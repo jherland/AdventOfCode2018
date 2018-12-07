@@ -39,14 +39,13 @@ event :: ReadP Event
 event =
     (string "falls asleep" >> return FallAsleep) <|>
     (string "wakes up" >> return WakeUp) <|>
-    BeginShift <$> (between (string "Guard #") (string " begins shift") digits)
+    BeginShift <$> between (string "Guard #") (string " begins shift") digits
 
 record :: ReadP Record
 record = do
     t <- between (char '[') (char ']') timestamp
     skipSpaces
-    e <- event
-    return $ Record t e
+    Record t <$> event
 
 parseRecords :: [String] -> [Record]
 parseRecords = map fst . concatMap (readP_to_S record)
@@ -73,16 +72,24 @@ nextGuard cur _ = cur
 
 generateStates :: UTCTime -> UTCTime -> Guard -> Awake -> [GuardState]
 generateStates start end guard awake
-    | start < end = (start, guard, awake) : generateStates (nextMinute start) end guard awake
+    | start < end = (start, guard, awake) :
+                    generateStates (nextMinute start) end guard awake
     | otherwise = []
 
 watch :: [Record] -> [GuardState]
 watch [] = undefined
 watch (first : rest) = go firstGuard first rest where
     firstGuard = nextGuard 0 (what first)
-    go g from [] = go' (nextGuard g (what from)) (when from) (nextMidnight (when from)) (what from)
-    go g from (to : future) = (go' (nextGuard g (what from)) (when from) (when to) (what from)) <> (go (nextGuard g (what from)) to future)
-    go' g start end event' = generateStates start end (nextGuard g event') (event' /= FallAsleep)
+    go g from [] =
+        go' (nextGuard g (what from))
+            (when from)
+            (nextMidnight (when from))
+            (what from)
+    go g from (to : future) =
+        go' (nextGuard g (what from)) (when from) (when to) (what from) <>
+        go (nextGuard g (what from)) to future
+    go' g start end event' =
+        generateStates start end (nextGuard g event') (event' /= FallAsleep)
 
 watchByGuard :: [GuardState] -> IntMap [GuardState]
 watchByGuard = IntMap.fromListWith (++) . map (\(t, g, a) -> (g, [(t, g, a)]))
@@ -91,7 +98,8 @@ minutesAsleep :: [GuardState] -> Int -- Number of entries where not awake
 minutesAsleep = length . filter (\(_, _, awake) -> not awake)
 
 watchByMinute :: [GuardState] -> IntMap [GuardState]
-watchByMinute = IntMap.fromListWith (++) . map (\(t, g, a) -> (getMinute t, [(t, g, a)])) where
+watchByMinute = IntMap.fromListWith (++) . map kv_from_state where
+    kv_from_state (t, g, a) = (getMinute t, [(t, g, a)])
     getMinute = floor . toRational . (/60) . utctDayTime
 
 readRecords :: IO [Record]
@@ -100,8 +108,9 @@ readRecords = do
     return . parseRecords . sort . lines $ input
 
 mostAsleep :: IntMap [GuardState] -> (Int, Int)
-mostAsleep = swap . IntMap.foldrWithKey maxValue (0, 0) . IntMap.map minutesAsleep where
-    maxValue k v mx = max mx (v, k)
+mostAsleep =
+    swap . IntMap.foldrWithKey maxValue (0, 0) . IntMap.map minutesAsleep where
+        maxValue k v mx = max mx (v, k)
 
 main :: IO ()
 main = do
@@ -110,10 +119,14 @@ main = do
     let by_guard = watchByGuard minutes
     -- part 1
     let sloth = fst $ mostAsleep by_guard
-    let sloth_by_minute = watchByMinute $ fromJust $ IntMap.lookup sloth by_guard
+    let sloth_by_minute = watchByMinute (
+                            fromJust (IntMap.lookup sloth by_guard))
     let sleepytime = fst $ mostAsleep sloth_by_minute
     print $ sloth * sleepytime
     -- part 2
-    let when_most_asleep_by_guard = IntMap.map mostAsleep $ IntMap.map watchByMinute by_guard
-    let (_, minute', sloth') = IntMap.foldrWithKey (\g (minute, asleep) mx -> max mx (asleep, minute, g)) (0, 0, 0) when_most_asleep_by_guard
+    let when_most_asleep_by_guard = IntMap.map mostAsleep (
+                                        IntMap.map watchByMinute by_guard)
+    let (_, minute', sloth') = IntMap.foldrWithKey maxAsleep (0, 0, 0)
+                                when_most_asleep_by_guard where
+            maxAsleep g (minute, asleep) mx = max mx (asleep, minute, g)
     print $ sloth' * minute'

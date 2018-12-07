@@ -5,10 +5,11 @@
 
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 
-occurences :: [Char] -> Map Char Int
-occurences chars = go Map.empty chars where
+occurences :: String -> Map Char Int
+occurences = go Map.empty where
     go m [] = m
     go m (char : chars') = go (Map.alter inc char m) chars' where
         inc :: Maybe Int -> Maybe Int
@@ -18,19 +19,20 @@ occurences chars = go Map.empty chars where
 hasNOfAny :: Int -> Map a Int -> Bool
 hasNOfAny n m = not $ Map.null $ Map.filterWithKey (\_ v -> v == n) m
 
-removeNthChar :: Int -> [Char] -> [Char]
-removeNthChar n s = (take n s) ++ (drop (n + 1) s)
+removeNthChar :: Int -> String -> String
+removeNthChar n s = take n s ++ drop (n + 1) s
 
 findDup :: [String] -> Maybe String
-findDup strings = go Set.empty strings where
+findDup = go Set.empty where
     go _ [] = Nothing
-    go set (s : ss) = if Set.member s set then Just s else go (Set.insert s set) ss
+    go set (s : ss) =
+        if Set.member s set
+        then Just s
+        else go (Set.insert s set) ss
 
 findAlmostDup :: [String] -> String
-findAlmostDup strings = go 0 strings where
-    go n ss = case findDup (map (removeNthChar n) ss) of
-        Just s -> s
-        Nothing -> go (n + 1) ss
+findAlmostDup = go 0 where
+    go n ss = fromMaybe (go (n + 1) ss) (findDup (map (removeNthChar n) ss))
 
 main :: IO ()
 main = do
