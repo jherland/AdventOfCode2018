@@ -19,15 +19,12 @@ build _ = undefined
 metadatas :: Tree -> [[Int]]
 metadatas (Node children metadata) = metadata : concatMap metadatas children
 
-extract :: [Int] -> [a] -> [a]
-extract [] _ = []
-extract (i:is) as = a ++ extract is as where
-    a = if i <= 0 || i > length as then [] else [as !! (i - 1)]
-
 value :: Tree -> Int
-value (Node [] []) = 0
 value (Node [] ms) = sum ms
-value (Node cs ms) = sum $ map value $ extract ms cs
+value (Node cs ms) = sum $ map value $ extract ms cs where
+    extract [] _ = []
+    extract (i:is) as = a ++ extract is as where
+        a = if i <= 0 || i > length as then [] else [as !! (i - 1)]
 
 main :: IO ()
 main = do
