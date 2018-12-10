@@ -36,15 +36,16 @@ def map_assignments(claims):
     return ret
 
 
-claims = set(parse_claims('03.input'))
-assignments = map_assignments(claims)
-contested = {k: v for k, v in assignments.items() if len(v) > 1}
+if __name__ == '__main__':
+    claims = set(parse_claims('03.input'))
+    assignments = map_assignments(claims)
+    contested = {k: v for k, v in assignments.items() if len(v) > 1}
 
-# part 1
-print(len(contested))
+    # part 1
+    print(len(contested))
 
-# part 2
-contested_claims = {claim for claims in contested.values() for claim in claims}
-uncontested_claims = claims - contested_claims
-assert len(uncontested_claims) == 1
-print(uncontested_claims.pop().id)
+    # part 2
+    contested_claims = {c for claims in contested.values() for c in claims}
+    uncontested_claims = claims - contested_claims
+    assert len(uncontested_claims) == 1
+    print(uncontested_claims.pop().id)

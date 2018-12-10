@@ -3,14 +3,14 @@
 import string
 
 
-def react(a, b):
+def reactive(a, b):
     return a != b and a.upper() == b.upper()
 
 
-def process(chars):
+def react(chars):
     ret = []
     for c in chars:
-        if ret and react(ret[-1], c):
+        if ret and reactive(ret[-1], c):
             ret.pop()
         else:
             ret.append(c)
@@ -21,11 +21,12 @@ def remove(x, chars):
     return filter(lambda c: c not in {x.lower(), x.upper()}, chars)
 
 
-with open('05.input') as f:
-    polymer = list(f.read().strip())
+if __name__ == '__main__':
+    with open('05.input') as f:
+        polymer = list(f.read().strip())
 
-# part 1
-print(len(process(polymer)))
+    # part 1
+    print(len(react(polymer)))
 
-# part 2
-print(min(len(process(remove(x, polymer))) for x in string.ascii_lowercase))
+    # part 2
+    print(min(len(react(remove(x, polymer))) for x in string.ascii_lowercase))

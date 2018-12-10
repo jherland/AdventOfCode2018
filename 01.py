@@ -12,11 +12,12 @@ def shifted(shifts, start=0):
         yield start
 
 
-with open('01.input') as f:
-    shifts = [int(line) for line in f]
+if __name__ == '__main__':
+    with open('01.input') as f:
+        shifts = [int(line) for line in f]
 
-# part 1
-print(sum(shifts))
+    # part 1
+    print(sum(shifts))
 
-# part 2
-print(first_dup(shifted(cycle(shifts))))
+    # part 2
+    print(first_dup(shifted(cycle(shifts))))

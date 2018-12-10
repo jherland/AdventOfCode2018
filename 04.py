@@ -42,18 +42,19 @@ def parse():
                 assert False
 
 
-# When are guards asleep? map guard -> [minute]
-by_guard = {}
-for guard, minute in parse():
-    by_guard.setdefault(guard, []).append(minute)
+if __name__ == '__main__':
+    # When are guards asleep? map guard -> [minute]
+    by_guard = {}
+    for guard, minute in parse():
+        by_guard.setdefault(guard, []).append(minute)
 
-# part 1
-sloth, minutes = max(by_guard.items(), key=lambda item: len(item[1]))
-print(sloth * most_sleepy_minute(minutes)[0])
+    # part 1
+    sloth, minutes = max(by_guard.items(), key=lambda item: len(item[1]))
+    print(sloth * most_sleepy_minute(minutes)[0])
 
-# part 2
-most_sleepy_by_guard = {
-    g: most_sleepy_minute(mins) for g, mins in by_guard.items()}
-sloth2, (minute, asleep) = max(
-    most_sleepy_by_guard.items(), key=lambda item: item[1][1])
-print(sloth2 * minute)
+    # part 2
+    most_sleepy_by_guard = {
+        g: most_sleepy_minute(mins) for g, mins in by_guard.items()}
+    sloth2, (minute, asleep) = max(
+        most_sleepy_by_guard.items(), key=lambda item: item[1][1])
+    print(sloth2 * minute)

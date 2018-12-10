@@ -10,17 +10,18 @@ def removeNthChar(n, words):
         yield word[:n] + word[n + 1:]
 
 
-with open('02.input') as f:
-    ids = [line.rstrip() for line in f.readlines()]
+if __name__ == '__main__':
+    with open('02.input') as f:
+        ids = [line.rstrip() for line in f.readlines()]
 
-# part 1
-idsWDoubles = len([i for i in ids if 2 in Counter(i).values()])
-idsWTriples = len([i for i in ids if 3 in Counter(i).values()])
-print(idsWDoubles * idsWTriples)
+    # part 1
+    idsWDoubles = len([i for i in ids if 2 in Counter(i).values()])
+    idsWTriples = len([i for i in ids if 3 in Counter(i).values()])
+    print(idsWDoubles * idsWTriples)
 
-# part 2
-for n in range(len(ids[0])):
-    dup = first_dup(removeNthChar(n, ids))
-    if dup is not None:
-        print(dup)
-        break
+    # part 2
+    for n in range(len(ids[0])):
+        dup = first_dup(removeNthChar(n, ids))
+        if dup is not None:
+            print(dup)
+            break
