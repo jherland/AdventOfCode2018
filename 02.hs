@@ -6,7 +6,7 @@
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe)
-import qualified Data.Set as Set
+import Utils
 
 occurences :: String -> Map Char Int
 occurences = go Map.empty where
@@ -22,17 +22,9 @@ hasNOfAny n m = not $ Map.null $ Map.filterWithKey (\_ v -> v == n) m
 removeNthChar :: Int -> String -> String
 removeNthChar n s = take n s ++ drop (n + 1) s
 
-findDup :: [String] -> Maybe String
-findDup = go Set.empty where
-    go _ [] = Nothing
-    go set (s : ss) =
-        if Set.member s set
-        then Just s
-        else go (Set.insert s set) ss
-
 findAlmostDup :: [String] -> String
 findAlmostDup = go 0 where
-    go n ss = fromMaybe (go (n + 1) ss) (findDup (map (removeNthChar n) ss))
+    go n ss = fromMaybe (go (n + 1) ss) (firstDup (map (removeNthChar n) ss))
 
 main :: IO ()
 main = do

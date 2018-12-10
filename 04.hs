@@ -4,7 +4,6 @@
 {-# OPTIONS_GHC -Wall #-}
 
 import Control.Applicative ((<|>))
-import Data.Char (isDigit)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.List (sort)
@@ -13,6 +12,7 @@ import Data.Time
 import Data.Tuple (swap)
 import Text.ParserCombinators.ReadP
 import Text.Read (readMaybe)
+import Utils
 
 type Guard = Int
 data Event =
@@ -25,9 +25,6 @@ data Record = Record {
     what :: Event }
     deriving Show
 
-digits :: ReadP Int
-digits = read <$> many1 (satisfy isDigit)
-
 timestamp :: ReadP UTCTime -- "1518-10-14 00:05" -> 1518-10-14 00:05:00 UTC
 timestamp = do
     s <- count 16 (satisfy (const True))
@@ -39,16 +36,13 @@ event :: ReadP Event
 event =
     (string "falls asleep" >> return FallAsleep) <|>
     (string "wakes up" >> return WakeUp) <|>
-    BeginShift <$> between (string "Guard #") (string " begins shift") digits
+    BeginShift <$> between (string "Guard #") (string " begins shift") int
 
 record :: ReadP Record
 record = do
     t <- between (char '[') (char ']') timestamp
     skipSpaces
     Record t <$> event
-
-parseRecords :: [String] -> [Record]
-parseRecords = map fst . concatMap (readP_to_S record)
 
 -- ffwd timestamp to next midnight
 nextMidnight :: UTCTime -> UTCTime
@@ -105,7 +99,7 @@ watchByMinute = IntMap.fromListWith (++) . map kv_from_state where
 readRecords :: IO [Record]
 readRecords = do
     input <- readFile "04.input"
-    return . parseRecords . sort . lines $ input
+    return . parseMany record . sort . lines $ input
 
 mostAsleep :: IntMap [GuardState] -> (Int, Int)
 mostAsleep =

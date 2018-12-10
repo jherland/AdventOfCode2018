@@ -8,20 +8,18 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe (fromMaybe, listToMaybe, maybeToList)
 import Text.ParserCombinators.ReadP
+import Utils
 
 type Step = Char
 type Dep = (Step, Step)  -- fst must finish before snd can begin
 type Deps = Map Step [Step] -- key cannot start until [val] are finished
 
-parseDep :: ReadP Dep
-parseDep = do
+dep :: ReadP Dep
+dep = do
     a <- string "Step " >> get
     b <- string " must be finished before step " >> get <*
          string " can begin." <* eof
     return (a, b)
-
-parse :: [String] -> [Dep]
-parse = map fst . concatMap (readP_to_S parseDep)
 
 -- Convert (a, b) pairs into mapping b -> [a]
 buildDeps :: [Dep] -> Deps
@@ -149,7 +147,7 @@ dot o = "digraph ordering {\n" ++ concatMap go o ++ "}\n" where
 main :: IO ()
 main = do
     input <- readFile "07.input"
-    let deps = parse $ lines input
+    let deps = parseMany dep $ lines input
     let jobs = buildDeps deps
     -- part 1
     print $ inOrder jobs

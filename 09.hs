@@ -3,20 +3,16 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
-import Data.Char (isDigit)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IntMap
 import Data.Tuple (swap)
 import Text.ParserCombinators.ReadP
+import Utils
 
-digits :: ReadP Int
-digits = read <$> many1 (satisfy isDigit)
-
-parse :: String -> (Int, Int) -- "{} players; last marble is worth {} points"
-parse = fst . head . readP_to_S go where
-  go = do
-    p <- digits <* string " players; last marble is worth "
-    m <- digits <* string " points\n" <* eof
+settings :: ReadP (Int, Int)
+settings = do
+    p <- int <* string " players; last marble is worth "
+    m <- int <* string " points\n" <* eof
     return (p, m)
 
 type Marblez = ([Int], [Int]) -- (rwd, fwd)
@@ -61,7 +57,7 @@ highScore (_, scores) = IntMap.foldr max 0 scores
 main :: IO ()
 main = do
     input <- readFile "09.input"
-    let (nplayers, hmarble) = parse input
+    let (nplayers, hmarble) = parseOne settings input
     -- part 1
     print $ highScore $ play nplayers hmarble
     -- part 2

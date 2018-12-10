@@ -3,38 +3,19 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
-import Data.Char (isDigit)
--- import Data.List (sort)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Text.ParserCombinators.ReadP
-
-type Coord = (Int, Int)
-
-digits :: ReadP Int
-digits = read <$> many1 (satisfy isDigit)
-
-coord :: ReadP Coord
-coord = do
-    x <- digits
-    y <- string ", " >> digits <* eof
-    return (x, y)
-
-parse :: [String] -> [Coord]
-parse = map fst . concatMap (readP_to_S coord)
-
--- Manhattan distance between two points
-mhdist :: Coord -> Coord -> Int
-mhdist (x1, y1) (x2, y2) = abs (x2 - x1) + abs (y2 - y1)
+import Utils
 
 -- Given point p and a list of points c, return the smallest distance from p
 -- to any c, and the point(s) c (one or more) that are found at that distance
 nearest :: Coord -> [Coord] -> (Int, [Coord])
-nearest p coords = go p (mhdist p (head coords), []) coords where
+nearest p coords = go p (manhattanDist p (head coords), []) coords where
     go _ (lowdist, cands) [] = (lowdist, cands)
     go p' (lowdist, cands) (c:cs) =
         let
-            cdist = mhdist p' c
+            cdist = manhattanDist p' c
         in case compare cdist lowdist of
             LT -> go p' (cdist, [c]) cs
             EQ -> go p' (lowdist, c:cands) cs
@@ -43,16 +24,7 @@ nearest p coords = go p (mhdist p (head coords), []) coords where
 -- Given point p and a list of points c, return the sum of distances from
 -- p to each c
 distToAll :: Coord -> [Coord] -> Int
-distToAll p = sum . map (mhdist p)
-
-type Bounds = (Coord, Coord) -- (top left, bottom right)
-
--- The bounding box that surrounds the given coords
-bounds :: [Coord] -> Bounds
-bounds coords = go (head coords, head coords) coords where
-    go minmax [] = minmax
-    go ((xmin, ymin), (xmax, ymax)) ((x, y):cs) =
-        go ((min xmin x, min ymin y), (max xmax x, max ymax y)) cs
+distToAll p = sum . map (manhattanDist p)
 
 -- Generate all coords within the given bounding box
 inside :: Bounds -> [Coord]
@@ -89,8 +61,8 @@ main :: IO ()
 main = do
     input <- readFile "06.input"
     -- let input = "1, 1\n1, 6\n8, 3\n3, 4\n5, 5\n8, 9\n"
-    let coords = parse $ lines input
-    let box = bounds coords
+    let coords = parseMany (coord <* eof) $ lines input
+    let box = boundingBox coords
     -- part 1
     let allAreas = areas coords $ inside box
     let edgeAreas = areas coords $ perimeter box
