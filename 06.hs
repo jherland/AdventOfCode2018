@@ -1,5 +1,5 @@
 #!/usr/bin/env stack
--- stack --resolver lts-12.10 script
+-- stack --resolver lts-12.10 script --package containers
 
 {-# OPTIONS_GHC -Wall #-}
 
