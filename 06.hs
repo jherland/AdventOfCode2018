@@ -26,11 +26,6 @@ nearest p coords = go p (manhattanDist p (head coords), []) coords where
 distToAll :: Coord -> [Coord] -> Int
 distToAll p = sum . map (manhattanDist p)
 
--- Generate all coords within the given bounding box
-inside :: Bounds -> [Coord]
-inside ((xmin, ymin), (xmax, ymax)) =
-    [(x, y) | x <- [xmin .. xmax], y <- [ymin .. ymax]]
-
 -- Generate all coords at the edge of the given bounding box
 perimeter :: Bounds -> [Coord]
 perimeter ((xmin, ymin), (xmax, ymax)) =
@@ -64,11 +59,11 @@ main = do
     let coords = parseMany (coord <* eof) $ lines input
     let box = boundingBox coords
     -- part 1
-    let allAreas = areas coords $ inside box
+    let allAreas = areas coords $ coordsWithin box
     let edgeAreas = areas coords $ perimeter box
     let finiteAreas = Map.difference allAreas edgeAreas
     let maxArea = maximum $ map snd $ Map.toList finiteAreas
     print maxArea
     -- part 2
-    let region = filter (<10000) . map (`distToAll` coords) $ inside box
+    let region = filter (<10000) . map (`distToAll` coords) $ coordsWithin box
     print $ length region

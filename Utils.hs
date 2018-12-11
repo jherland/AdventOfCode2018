@@ -15,6 +15,10 @@ boundingBox (p:ps) = foldr minmax (p, p) ps where
     minmax (x, y) ((xmin, ymin), (xmax, ymax)) =
         ((min xmin x, min ymin y), (max xmax x, max ymax y))
 
+coordsWithin :: Bounds -> [Coord] -- Generate all coords within a bounding box
+coordsWithin ((xmin, ymin), (xmax, ymax)) =
+    [(x, y) | x <- [xmin .. xmax], y <- [ymin .. ymax]]
+
 manhattanDist :: Coord -> Coord -> Int
 manhattanDist (x1, y1) (x2, y2) = abs (x2 - x1) + abs (y2 - y1)
 
