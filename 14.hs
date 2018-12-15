@@ -13,7 +13,8 @@ type Elves = [Index]
 type Scoreboard = (Seq Score, Elves)
 
 digits :: Int -> Seq Int
-digits = go empty where
+digits 0 = singleton 0
+digits s = go empty s where
     go ds 0 = ds
     go ds n = go (n `mod` 10 <| ds) (n `div` 10)
 
@@ -55,14 +56,9 @@ join = concatMap show
 main :: IO ()
 main = do
     input <- readFile "14.input"
-    let scores' = map (\c -> read @Int [c]) $ head $ lines input
     let scores = fromList [3, 7]
     let initial = (scores, [0, 1])
-    putStrLn $ join $ nRecipesAfterM initial 10 9
-    putStrLn $ join $ nRecipesAfterM initial 10 5
-    putStrLn $ join $ nRecipesAfterM initial 10 18
-    putStrLn $ join $ nRecipesAfterM initial 10 2018
     -- part 1
-    putStrLn $ join $ nRecipesAfterM initial 10 637061
-    -- 1513321432 is too low!
+    let after = read @Int $ head $ lines input
+    putStrLn $ join $ nRecipesAfterM initial 10 after
     -- part 2
