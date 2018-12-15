@@ -4,32 +4,35 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE TypeApplications #-}
 
+import Prelude hiding (drop, length, take)
+import Data.Sequence
+
 type Index = Int
 type Score = Int
 type Elves = [Index]
-type Scoreboard = ([Score], Elves)
+type Scoreboard = (Seq Score, Elves)
 
-digits :: Int -> [Int]
-digits = go [] where
+digits :: Int -> Seq Int
+digits = go empty where
     go ds 0 = ds
-    go ds n = go (n `mod` 10 : ds) (n `div` 10)
+    go ds n = go (n `mod` 10 <| ds) (n `div` 10)
 
-combine :: [Score] -> [Score]
+combine :: Seq Score -> Seq Score
 combine = digits . sum
 
-index :: [Score] -> Int -> Index
-index scores i = i `mod` length scores
+ix :: Seq Score -> Int -> Index
+ix scores i = i `mod` length scores
 
-at :: [Score] -> Index -> Score
-at scores i = scores !! index scores i
+at :: Seq Score -> Index -> Score
+at scores i = scores `index` ix scores i
 
-addScores :: [Score] -> Elves -> [Score]
-addScores scores elves = scores ++ combine recipes where
-    recipes = map (at scores) elves
+addScores :: Seq Score -> Elves -> Seq Score
+addScores scores elves = scores >< combine recipes where
+    recipes = fromList $ map (at scores) elves
 
-advance :: [Score] -> Elves -> Elves
+advance :: Seq Score -> Elves -> Elves
 advance scores = map (adv scores) where
-    adv scores i = index scores $ i + 1 + scores !! i
+    adv scores i = ix scores $ i + 1 + scores `index` i
 
 oneRound :: Scoreboard -> Scoreboard
 oneRound (scores, elves) = (scores', elves') where
@@ -43,17 +46,17 @@ roundsUntilLength board n
     | length (fst board) >= n = board
     | otherwise = roundsUntilLength (oneRound board) n
 
-nRecipesAfterM :: Scoreboard -> Int -> Int -> [Score]
+nRecipesAfterM :: Scoreboard -> Int -> Int -> Seq Score
 nRecipesAfterM scores n m = take n $ drop m $ fst $ roundsUntilLength scores (n + m)
 
-join :: [Score] -> String
+join :: Seq Score -> String
 join = concatMap show
 
 main :: IO ()
 main = do
     input <- readFile "14.input"
     let scores' = map (\c -> read @Int [c]) $ head $ lines input
-    let scores = [3, 7]
+    let scores = fromList [3, 7]
     let initial = (scores, [0, 1])
     putStrLn $ join $ nRecipesAfterM initial 10 9
     putStrLn $ join $ nRecipesAfterM initial 10 5
@@ -61,5 +64,5 @@ main = do
     putStrLn $ join $ nRecipesAfterM initial 10 2018
     -- part 1
     putStrLn $ join $ nRecipesAfterM initial 10 637061
-
+    -- 1513321432 is too low!
     -- part 2
