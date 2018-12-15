@@ -4,61 +4,60 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE TypeApplications #-}
 
-import Prelude hiding (drop, length, take)
-import Data.Sequence
+import Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as IntMap
 
-type Index = Int
-type Score = Int
-type Elves = [Index]
-type Scoreboard = (Seq Score, Elves)
+type Elves = [Int]
+type Scores = IntMap Int
+type Scoreboard = (Scores, Int, Elves)
 
-digits :: Int -> Seq Int
-digits 0 = singleton 0
-digits s = go empty s where
+digits :: Int -> [Int]
+digits 0 = [0]
+digits s = go [] s where
     go ds 0 = ds
-    go ds n = go (n `mod` 10 <| ds) (n `div` 10)
+    go ds n = let (x, y) = divMod n 10 in go (y : ds) x
 
-combine :: Seq Score -> Seq Score
-combine = digits . sum
+advance :: Scores -> Int -> Elves -> Elves
+advance scores len = map (adv scores len) where
+    adv scores' len' i = (i + 1 + (scores' IntMap.! i)) `mod` len'
 
-ix :: Seq Score -> Int -> Index
-ix scores i = i `mod` length scores
+oneExperiment :: Scoreboard -> Scoreboard
+oneExperiment (scores, len, elves) = (scores', len', elves') where
+    current = map (scores IntMap.!) elves
+    digits' = digits $ sum current
+    scores' = foldr insert scores $ zip [len ..] digits'
+    insert (i, s) = IntMap.insert i s
+    len' = len + length digits'
+    elves' = advance scores' len' elves
 
-at :: Seq Score -> Index -> Score
-at scores i = scores `index` ix scores i
-
-addScores :: Seq Score -> Elves -> Seq Score
-addScores scores elves = scores >< combine recipes where
-    recipes = fromList $ map (at scores) elves
-
-advance :: Seq Score -> Elves -> Elves
-advance scores = map (adv scores) where
-    adv scores i = ix scores $ i + 1 + scores `index` i
-
-oneRound :: Scoreboard -> Scoreboard
-oneRound (scores, elves) = (scores', elves') where
-    scores' = addScores scores elves
-    elves' = advance scores' elves
-
--- Hmm, how do I turn this into an infinite series of recipe scores?
--- I want my main to simply do: take 10 $ drop 999 recipes...
 roundsUntilLength :: Scoreboard -> Int -> Scoreboard
-roundsUntilLength board n
-    | length (fst board) >= n = board
-    | otherwise = roundsUntilLength (oneRound board) n
+roundsUntilLength (scores, len, elves) n
+    | len >= n = (scores, len, elves)
+    | otherwise = roundsUntilLength (oneExperiment (scores, len, elves)) n
 
-nRecipesAfterM :: Scoreboard -> Int -> Int -> Seq Score
-nRecipesAfterM scores n m = take n $ drop m $ fst $ roundsUntilLength scores (n + m)
+nRecipesAfterM :: Scoreboard -> Int -> Int -> [Int]
+nRecipesAfterM board n m = map (scores IntMap.!) [m .. m + n - 1] where
+    (scores, _, _) = roundsUntilLength board (n + m)
 
-join :: Seq Score -> String
-join = concatMap show
+windows :: Scoreboard -> Int -> [(Int, [Int])]
+windows board n = go board 0 where
+    go board_ i = extract : go board' (i + 1) where
+        board' = roundsUntilLength board_ (n + i)
+        (scores', _ , _) = board'
+        extract = (i, map (scores' IntMap.!) [i .. i + n - 1])
+
+findSequence :: Scoreboard -> [Int] -> Int
+findSequence board needle = go $ windows board (length needle) where
+    go ((i, win) : rest) = if needle == win then i else go rest
+    go _ = undefined
 
 main :: IO ()
 main = do
     input <- readFile "14.input"
-    let scores = fromList [3, 7]
-    let initial = (scores, [0, 1])
+    let num = read @Int $ head $ lines input
+    let initial = (IntMap.fromList [(0, 3), (1, 7)], 2, [0, 1])
     -- part 1
-    let after = read @Int $ head $ lines input
-    putStrLn $ join $ nRecipesAfterM initial 10 after
+    putStrLn $ concatMap show $ nRecipesAfterM initial 10 num
     -- part 2
+    let needle = digits num
+    print $ findSequence initial needle
