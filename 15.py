@@ -4,7 +4,7 @@ from io import StringIO
 import sys
 
 
-Debug = True
+Debug = False
 
 
 def debug(s):
@@ -20,18 +20,12 @@ def bounds(coords):
     return (ymin, xmin), (ymax, xmax)
 
 
-def mhdist(a, b):
-    ay, ax = a
-    by, bx = b
-    return abs(by - ay) + abs(bx - ax)
-
-
 class Unit:
-    def __init__(self, side, pos):
+    def __init__(self, side, pos, attack_power):
         self.side = side
         self.pos = pos
         self.hp = 200
-        self.ap = 3
+        self.ap = attack_power
 
     def __str__(self):
         return '{}/{}@{}'.format(self.side, self.hp, self.pos)
@@ -79,21 +73,33 @@ class Unit:
         '''Return spaces that are in range of any enemy.'''
         return {p for e in self.enemies(game) for p in game.adjacent(e.pos)}
 
+    def choose_target(self, game, in_range):
+        '''Return the closest 'in_range' square along with its distance map.'''
+        def sort_by(target_w_distance_map):
+            '''Sort by distance from self, then by target's reading order.'''
+            target, distances = target_w_distance_map
+            return distances.get(self.pos, sys.maxsize), target
+
+        all_distances = {tgt: game.distance_from(tgt) for tgt in in_range}
+        target, target_ds = sorted(all_distances.items(), key=sort_by)[0]
+        if (self.pos not in target_ds):  # None of the targets are reachable
+            return None, None
+        return target, target_ds
+
     def find_path(self, game, in_range):
         '''Determine the shortest path to any square in range of an enemy.'''
         debug('  searching for paths to enemies...')
-        min_dist, move_to = sys.maxsize, None
-        adjacents = game.adjacent(self.pos)  # move_to candidates
-        for dst in sorted(in_range, key=lambda p: mhdist(self.pos, p)):
-            dists = game.distance_from(dst)
-            d, a = sorted(
-                (dists.get(adj, sys.maxsize), adj) for adj in adjacents)[0]
-            if d < min_dist:
-                min_dist, move_to = d, a
-        if move_to:
-            debug('  approach via {}, which is {} from in-range'.format(
-                move_to, min_dist))
-            assert move_to in game.adjacent(self.pos)
+        target, distance_map = self.choose_target(game, in_range)
+        if target is None:
+            debug('  no paths found')
+            return None
+        debug('  approaching {} from a distance of {}'.format(
+            target, distance_map[self.pos]))
+        # Find which adjacent square to move through
+        move_to = sorted(
+            game.adjacent(self.pos),
+            key=lambda adj: (distance_map.get(adj, sys.maxsize), adj))[0]
+        debug('  via {}'.format(move_to))
         return move_to
 
     def move(self, dst):
@@ -108,7 +114,7 @@ class Unit:
 
 class Game:
     @classmethod
-    def parse(cls, path):
+    def parse(cls, path, elf_attack=3, goblin_attack=3):
         space = set()  # Non-wall spaces
         units = {}  # pos -> Unit instance
         with open(path) as f:
@@ -117,8 +123,10 @@ class Game:
                     pos = (y, x)
                     if c != '#':
                         space.add(pos)
-                        if c in {'E', 'G'}:
-                            units[pos] = Unit(c, pos)
+                        if c == 'E':
+                            units[pos] = Unit('E', pos, elf_attack)
+                        elif c == 'G':
+                            units[pos] = Unit('G', pos, goblin_attack)
         return cls(space, units)
 
     def __init__(self, space, units):
@@ -204,12 +212,24 @@ class Game:
 
 
 if __name__ == '__main__':
-    game = Game.parse(sys.argv[1])
-
-    #  print(game.render())
-    #  game.round()
-    #  print(game.render())
-
     # part 1
+    game = Game.parse('15.input', elf_attack=3)
     rounds = game.until_combat_end()
+    debug(game.render())
     print((rounds - 1) * sum(u.hp for u in game.units.values()))
+
+    # part 2
+    for elf_attack in range(4, sys.maxsize):
+        debug('Elves attacking with {}'.format(elf_attack))
+        game = Game.parse('15.input', elf_attack=elf_attack)
+        before = len([u for u in game.units.values() if u.side == 'E'])
+        rounds = game.until_combat_end()
+        after = len([u for u in game.units.values() if u.side == 'E'])
+        debug(game.render())
+        if before > after:
+            debug('{} elves died in the making of this combat'.format(
+                before - after))
+        else:
+            debug('All elves survived!')
+            print((rounds - 1) * sum(u.hp for u in game.units.values()))
+            break
