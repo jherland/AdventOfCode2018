@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from io import StringIO
+import sys
 
 
 Debug = True
@@ -19,14 +20,10 @@ def bounds(coords):
     return (ymin, xmin), (ymax, xmax)
 
 
-def shortest(lists):
-    ret = []
-    for l in lists:
-        if not ret or len(l) < len(ret[0]):
-            ret = [l]
-        elif len(l) == len(ret[0]):
-            ret.append(l)
-    return ret
+def mhdist(a, b):
+    ay, ax = a
+    by, bx = b
+    return abs(by - ay) + abs(bx - ax)
 
 
 class Unit:
@@ -53,15 +50,10 @@ class Unit:
             debug('  no squares in range')
             return False
         elif self.pos not in in_range:
-            debug('  searching for paths...')
-            paths = sorted(shortest(
-                [p for dst in in_range for p in game.paths(self.pos, dst)]))
-            if not paths:
+            move_to = self.find_path(game, in_range)
+            if move_to is None:
                 debug('  no path to enemies')
                 return False
-            debug('  paths: {}'.format(paths))
-            move_to = paths[0][0]
-            assert move_to in game.adjacent(self.pos)
             debug('  moving to {}'.format(move_to))
             self.move(move_to)
 
@@ -76,16 +68,33 @@ class Unit:
         debug('  attacking {}'.format(victim))
         if self.attack(victim):
             debug('  {} has died!'.format(victim))
-            del game.units[victim.pos]
+            game.kill(victim)
         return False
+
+    def enemies(self, game):
+        '''Return all remaining enemies in current game.'''
+        return {u for u in game.units.values() if u.side != self.side}
 
     def in_range(self, game):
         '''Return spaces that are in range of any enemy.'''
         return {p for e in self.enemies(game) for p in game.adjacent(e.pos)}
 
-    def enemies(self, game):
-        '''Return all remaining enemies in current game.'''
-        return {u for u in game.units.values() if u.side != self.side}
+    def find_path(self, game, in_range):
+        '''Determine the shortest path to any square in range of an enemy.'''
+        debug('  searching for paths to enemies...')
+        min_dist, move_to = sys.maxsize, None
+        adjacents = game.adjacent(self.pos)  # move_to candidates
+        for dst in sorted(in_range, key=lambda p: mhdist(self.pos, p)):
+            dists = game.distance_from(dst)
+            d, a = sorted(
+                (dists.get(adj, sys.maxsize), adj) for adj in adjacents)[0]
+            if d < min_dist:
+                min_dist, move_to = d, a
+        if move_to:
+            debug('  approach via {}, which is {} from in-range'.format(
+                move_to, min_dist))
+            assert move_to in game.adjacent(self.pos)
+        return move_to
 
     def move(self, dst):
         '''Move to the given location.'''
@@ -148,30 +157,34 @@ class Game:
         '''Return any available pos adjacent to the given pos.'''
         if available is None:
             available = self.available()
-        return [p for p in self.around(pos) if p in available]
+        return {p for p in self.around(pos) if p in available}
 
-    def paths(self, a, b):
-        '''Yield paths from a to b using only available space.'''
-        completed = []
+    def distance_from(self, pos, available=None):
+        '''Return map: p -> dist(p, pos) for p in available.'''
+        if available is None:
+            available = self.available()
+        ret = {pos: 0}  # p -> distance from p to pos
+        available.discard(pos)
+        adjacents = self.adjacent(pos, available)
+        available -= adjacents
+        queue = list(adjacents)
+        while queue:
+            p = queue.pop(0)
+            dist = min(ret.get(a, sys.maxsize) for a in self.around(p)) + 1
+            ret[p] = dist
+            adjacents = self.adjacent(p, available)
+            available -= adjacents
+            queue.extend(adjacents)
+        return ret
 
-        def go(cur, available, in_progress):
-            if cur == a:  # done!
-                debug('Found {} -> {}: {}'.format(a, b, in_progress))
-                completed.append(in_progress)
-                return
-            elif completed and len(in_progress) >= len(completed[0]):
-                return  # too long
-            in_progress = [cur] + in_progress
-            available = available - {cur}
-            for adj in self.adjacent(cur, available):
-                go(adj, available, in_progress)
-
-        go(b, self.available(), [])
-        return completed
+    def kill(self, unit):
+        del self.units[unit.pos]
 
     def round(self):
         '''Do one complete round, i.e. give each unit one turn.'''
         for pos, unit in sorted(self.units.items()):
+            if unit.hp <= 0:  # already dead
+                continue
             del self.units[pos]  # Lift unit from board
             ends = unit.turn(self)
             self.units[unit.pos] = unit  # Replace unit onto board
@@ -191,12 +204,12 @@ class Game:
 
 
 if __name__ == '__main__':
-    game = Game.parse('15.input')
+    game = Game.parse(sys.argv[1])
 
-    print(game.render())
-    game.round()
-    print(game.render())
+    #  print(game.render())
+    #  game.round()
+    #  print(game.render())
 
     # part 1
-    #  rounds = game.until_combat_end()
-    #  print((rounds - 1) * sum(u.hp for u in game.units.values()))
+    rounds = game.until_combat_end()
+    print((rounds - 1) * sum(u.hp for u in game.units.values()))
