@@ -29,6 +29,7 @@ type Units = Map Coord Unit
 data Game = Game { space_ :: Space
                  , units_ :: Units
                  }
+type DistanceMap = Map Coord Int
 
 parse :: Int -> String -> Game
 parse elfAttack= buildGame . concat . zipWith parseLine [0 ..] . lines where
@@ -57,21 +58,12 @@ render (Game space units) =
         suffix y = "  " ++ intercalate ", " (
             Map.elems (Map.map show (Map.filter ((== y) . fst . pos_) units)))
 
-up :: Coord -> Coord
-up (y, x) = (pred y, x)
-
-down :: Coord -> Coord
-down (y, x) = (succ y, x)
-
-left :: Coord -> Coord
-left (y, x) = (y, pred x)
-
-right :: Coord -> Coord
-right (y, x) = (y, succ x)
+around :: Coord -> Space -- coords around the given point, in reading order
+around (y, x) = Set.fromDistinctAscList [
+                        (pred y, x), (y, pred x), (y, succ x), (succ y, x)]
 
 adjacent :: Space -> Coord -> Space -- adjacent coords that exist in space
-adjacent space c = Set.intersection space around where
-    around = Set.fromDistinctAscList [up c, left c, right c, down c]
+adjacent space = Set.intersection space . around
 
 isAdjacent :: Space -> Coord -> Coord -> Bool
 isAdjacent space pos1 pos2 = pos2 `Set.member` adjacent space pos1
@@ -91,20 +83,25 @@ available :: Game -> Space
 available (Game space units) = foldr Set.delete space $ Map.keys units
 
 inRange :: Game -> Unit -> Space -- Open squares adjacent to enemies
-inRange game@(Game space units) unit = trace (show unit ++ ": " ++ show enemyAdjs) enemyAdjs where
+inRange game@(Game space units) unit = enemyAdjs where
     avail = available game
     enemyPos = Map.keys $ enemies units unit
     enemyAdjs = Set.unions $ map (adjacent avail) enemyPos
 
-type DistanceMap = Map Coord Int
+bfs :: Space -> DistanceMap -> [(Coord, Int)] -> Space -> DistanceMap
+bfs _ graph [] _ = graph
+bfs space graph queue seen = bfs space graph' queue'' seen' where
+    ((pos, dist) : queue') = queue
+    neighbours = adjacent space pos
+    unseen = Set.difference neighbours seen
+    enqueue = [(c, dist + 1) | c <- Set.toList unseen]
+    graph' = Map.union graph $ Map.fromList enqueue
+    queue'' = queue' ++ enqueue
+    seen' = Set.union seen unseen
 
-distanceFrom :: Space -> Coord -> DistanceMap -- Map space to dist from pos
-distanceFrom space pos = go space [(pos, 0)] Map.empty where
-    go avail [] result = result
-    go avail ((p, d) : queue) result = go avail' queue' result' where
-        avail' = Set.delete p avail
-        queue' = [(a, d + 1) | a <- Set.elems (adjacent avail' p)] <> queue
-        result' = Map.insert p d result
+distanceFrom :: Space -> Coord -> DistanceMap -- Map space to distance from pos
+distanceFrom space pos =
+    bfs space (Map.singleton pos 0) [(pos, 0)] (Set.singleton pos)
 
 chooseTarget :: Space -> Space -> Coord -> (Maybe Coord, DistanceMap)
 chooseTarget space inrange src =
@@ -114,36 +111,18 @@ chooseTarget space inrange src =
         (target, distmap) = head $ sortOn nearest (Map.toList reachable)
         nearest (tgt, dmap) = (dmap Map.! src, tgt)
      in if Map.null reachable 
-           then (Nothing, Map.empty)
-           else (Just target, distmap)
+           then trace "  No target chosen" (Nothing, Map.empty)
+           else trace ("  Chose target " ++ show target) (Just target, distmap)
 
 findPath :: Space -> Space -> Coord -> Maybe Coord -- Find where to move
 findPath space inrange src =
     let (target, distmap) = chooseTarget space inrange src
         -- find adjancent square nearest target
-        adjDist = Map.fromSet (distmap Map.!?) (adjacent space src)
+        adjDist = traceShowId $ Map.fromSet (distmap Map.!?) (adjacent space src)
         moveTo = sortOn swap (Map.toList (Map.filter isJust adjDist))
      in if isNothing target || null moveTo
            then Nothing
            else Just (fst $ head moveTo)
-
-paths :: Space -> Coord -> Coord -> [[Coord]] -- Enumerate paths from a to b
-paths space a b = go space a b [[]] [] where
-    go space a b inprogress found
-        | a == b = inprogress ++ found -- done!
-        -- | a == b = trace (show b ++ "*" ++ show inprogress ++ "*" ++ show found) inprogress ++ found -- done!
-        | otherwise = concatMap (\c -> go space' a c inprogress' found) adj where
-            inprogress' = map (\alt -> b : alt) inprogress
-            adj = adjacent space b
-            -- adj = trace (show b ++ "/" ++ show inprogress ++ "/" ++ show found) $ adjacent space b
-            space' = Set.delete b space
-
-shortest :: [[Coord]] -> (Int, [[Coord]])
-shortest = foldr minimal (maxBound :: Int, []) where
-    minimal path (len, shortest)
-        | length path < len = (length path, [path])
-        | length path == len = (len, path : shortest)
-        | length path > len = (len, shortest)
 
 enemyInRange :: Game -> Unit -> Maybe Unit
 enemyInRange (Game space units) unit = chooseFirst adjacentEnemies where
@@ -151,9 +130,6 @@ enemyInRange (Game space units) unit = chooseFirst adjacentEnemies where
         adjacent' = adjacent space $ pos_ unit
         adjacentEnemies = Map.restrictKeys enemies' adjacent'
         chooseFirst = listToMaybe . Map.elems
-
-move :: Game -> Unit -> Unit
-move game unit = unit { pos_ = up $ pos_ unit }
 
 turn :: Game -> Unit -> Units
 turn = phase1
@@ -180,35 +156,26 @@ phase3 game@(Game space units) unit inrange
 
 phase4 :: Game -> Unit -> Space -> (Units, Unit) -- Figure out where to move
 phase4 game@(Game space units) unit inrange =
-    let avail = available game
+    let avail = trace ("4. Finding path from " ++ show unit ++ " to " ++ show inrange) $ available game
         moveTo' = findPath avail inrange (pos_ unit)
-        moveTo = trace ("4. Finding path from " ++ show unit ++ " to " ++ show inrange) moveTo'
+        moveTo = trace ("  Found: " ++ show moveTo') moveTo'
     in maybe (units, unit) (phase5 game unit) moveTo
 
 phase5 :: Game -> Unit -> Coord -> (Units, Unit) -- move one step
-phase5 game@(Game space units) unit pos = trace ("5. Moving " ++  show unit ++ " to " ++ show pos) (units, unit') where
+phase5 game@(Game space units) unit pos = trace ("5. Moving " ++  show unit ++ " to " ++ show pos) $ phase6 game unit' where
     avail = available game
     unit' = assert (pos `Set.member` adjacent avail (pos_ unit)) unit { pos_ = pos }
+
+phase6 :: Game -> Unit -> (Units, Unit) -- attack?
+phase6 game@(Game space units) unit = (units, unit)
 
 phase9 :: Game -> Unit -> (Units, Unit)
 phase9 game unit = (units_ game, unit)
 
-turn' :: Game -> Unit -> Units
-turn' (Game space units) unit
-    | not $ hasEnemies units unit = units -- combat has ended
-    | otherwise = units'' where
-        units' = Map.delete (pos_ unit) units
-        game' = Game space units'
-        inrange = inRange game' unit
-        enemy = enemyInRange game' unit
-        unit' = if isNothing enemy then move game' unit else unit
-        -- TODO: Attack!
-        units'' = Map.insert (pos_ unit') unit' units'
-
 oneRound :: Game -> Game
 oneRound (Game space units) =
     Game space (Map.foldl perUnit units units) where
-        perUnit units' unit = turn (Game space units') $ traceShowId unit
+        perUnit units' = turn (Game space units')
 
 initGame :: Int -> IO Game
 initGame elfAttack = do
@@ -219,19 +186,6 @@ smallGame :: IO Game
 smallGame = do
     input <- readFile "15.small.input"
     return $ parse 3 input
-
-smallSearch :: IO ()
-smallSearch = do
-    game <- smallGame
-    putStr $ render game
-    let p1 = (1, 1)
-    let p2 = (1, 2)
-    let space = space_ game
-    let space' = Set.delete (3, 2) $ Set.delete (1, 4) $ Set.delete (3, 5) space
-    let (len, paths') = shortest $ paths space' p1 p2
-    print $ length paths'
-    print len
-    print paths'
 
 main :: IO ()
 main = do
