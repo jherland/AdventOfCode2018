@@ -44,11 +44,11 @@ class Unit:
             debug('  no squares in range')
             return False
         elif self.pos not in in_range:
-            move_to = self.find_path(game, in_range)
-            if move_to is None:
+            try:
+                move_to = self.next_move(game, in_range)
+            except IndexError:
                 debug('  no path to enemies')
                 return False
-            debug('  moving to {}'.format(move_to))
             self.move(move_to)
 
         if self.pos not in in_range:
@@ -73,34 +73,13 @@ class Unit:
         '''Return spaces that are in range of any enemy.'''
         return {p for e in self.enemies(game) for p in game.adjacent(e.pos)}
 
-    def choose_target(self, game, in_range):
-        '''Return the closest 'in_range' square along with its distance map.'''
-        def sort_by(target_w_distance_map):
-            '''Sort by distance from self, then by target's reading order.'''
-            target, distances = target_w_distance_map
-            return distances.get(self.pos, sys.maxsize), target
-
-        all_distances = {tgt: game.distance_from(tgt) for tgt in in_range}
-        target, target_ds = sorted(all_distances.items(), key=sort_by)[0]
-        if (self.pos not in target_ds):  # None of the targets are reachable
-            return None, None
-        return target, target_ds
-
-    def find_path(self, game, in_range):
-        '''Determine the shortest path to any square in range of an enemy.'''
-        debug('  searching for paths to enemies...')
-        target, distance_map = self.choose_target(game, in_range)
-        if target is None:
-            debug('  no paths found')
-            return None
-        debug('  approaching {} from a distance of {}'.format(
-            target, distance_map[self.pos]))
-        # Find which adjacent square to move through
-        move_to = sorted(
-            game.adjacent(self.pos),
-            key=lambda adj: (distance_map.get(adj, sys.maxsize), adj))[0]
-        debug('  via {}'.format(move_to))
-        return move_to
+    def next_move(self, game, in_range):
+        '''Find the adjacent square that brings us closest to the enemy.'''
+        target, d = game.nearest(self.pos, in_range)
+        debug('  approaching {} from a distance of {}'.format(target, d))
+        neighbour, _ = game.nearest(target, game.adjacent(self.pos))
+        debug('  via {}'.format(neighbour))
+        return neighbour
 
     def move(self, dst):
         '''Move to the given location.'''
@@ -184,6 +163,16 @@ class Game:
             available -= adjacents
             queue.extend(adjacents)
         return ret
+
+    def nearest(self, pos, points, available=None):
+        '''Return (p, distance(pos, p)) for the point p nearest to pos.'''
+        def dist_then_coord(item):
+            p, d = item
+            return (d, p)
+
+        d_from_pos = self.distance_from(pos, available)
+        point_ds = {p: d for p, d in d_from_pos.items() if p in points}
+        return sorted(point_ds.items(), key=dist_then_coord)[0]
 
     def kill(self, unit):
         del self.units[unit.pos]
