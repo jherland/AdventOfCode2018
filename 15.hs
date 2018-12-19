@@ -2,21 +2,20 @@
 -- stack --resolver lts-12.10 script --package containers
 
 {-# OPTIONS_GHC -Wall #-}
--- {-# LANGUAGE TupleSections #-}
 
 import Control.Exception (assert)
-import Data.List (intercalate, sort, sortOn)
+import Data.List (intercalate, nub, sortOn)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes, fromJust, isJust, isNothing, listToMaybe)
+import Data.Maybe (listToMaybe)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Tuple (swap)
-import Utils
 import Debug.Trace
+import Utils
 
 type Space = Set Coord -- (y, x) for all non-wall coords
-data Kind = Elf | Goblin deriving (Eq, Show)
+data Kind = Elf | Goblin deriving (Eq, Ord, Show)
 data Unit = Unit { pos_ :: Coord
                  , kind_ :: Kind
                  , hp_ :: Int
@@ -65,9 +64,6 @@ around (y, x) = Set.fromDistinctAscList [
 adjacent :: Space -> Coord -> Space -- adjacent coords that exist in space
 adjacent space = Set.intersection space . around
 
-isAdjacent :: Space -> Coord -> Coord -> Bool
-isAdjacent space pos1 pos2 = pos2 `Set.member` adjacent space pos1
-
 enemies :: Units -> Unit -> Units
 enemies units unit = case kind_ unit of
     Elf -> Map.filter ((== Goblin) . kind_) units
@@ -76,15 +72,15 @@ enemies units unit = case kind_ unit of
 hasEnemies :: Units -> Unit -> Bool
 hasEnemies units = not. Map.null . enemies units
 
-occupied :: Units -> Coord -> Bool -- Location c is occupied by one of units
-occupied units c = c `Set.member` Map.keysSet units
+kindsLeft :: Game -> [Kind] -- what kinds are left in combat
+kindsLeft (Game _ units) = nub $ map kind_ $ Map.elems units
 
-available :: Game -> Space
-available (Game space units) = foldr Set.delete space $ Map.keys units
+openSquares :: Game -> Space
+openSquares (Game space units) = foldr Set.delete space $ Map.keys units
 
 inRange :: Game -> Unit -> Space -- Open squares adjacent to enemies
-inRange game@(Game space units) unit = enemyAdjs where
-    avail = available game
+inRange game@(Game _ units) unit = enemyAdjs where
+    avail = openSquares game
     enemyPos = Map.keys $ enemies units unit
     enemyAdjs = Set.unions $ map (adjacent avail) enemyPos
 
@@ -103,44 +99,48 @@ distanceFrom :: Space -> Coord -> DistanceMap -- Map space to distance from pos
 distanceFrom space pos =
     bfs space (Map.singleton pos 0) [(pos, 0)] (Set.singleton pos)
 
-chooseTarget :: Space -> Space -> Coord -> (Maybe Coord, DistanceMap)
-chooseTarget space inrange src =
-    let allDistances = Map.fromSet (distanceFrom space) inrange
-        reachable = Map.filter (Map.member src) allDistances
-        -- find target nearest to src
-        (target, distmap) = head $ sortOn nearest (Map.toList reachable)
-        nearest (tgt, dmap) = (dmap Map.! src, tgt)
-     in if Map.null reachable 
-           then trace "  No target chosen" (Nothing, Map.empty)
-           else trace ("  Chose target " ++ show target) (Just target, distmap)
-
-findPath :: Space -> Space -> Coord -> Maybe Coord -- Find where to move
-findPath space inrange src =
-    let (target, distmap) = chooseTarget space inrange src
-        -- find adjancent square nearest target
-        adjDist = traceShowId $ Map.fromSet (distmap Map.!?) (adjacent space src)
-        moveTo = sortOn swap (Map.toList (Map.filter isJust adjDist))
-     in if isNothing target || null moveTo
+nearest :: Space -> Coord -> Space -> Maybe (Coord, Int) -- find b nearest a
+nearest space a bs =
+    let distmap = distanceFrom space a
+        bDistances = Map.restrictKeys distmap bs
+     in if Map.null bDistances
            then Nothing
-           else Just (fst $ head moveTo)
+           else Just (swap $ minimum $ map swap $ Map.toList bDistances)
 
-enemyInRange :: Game -> Unit -> Maybe Unit
-enemyInRange (Game space units) unit = chooseFirst adjacentEnemies where
+nextMove :: Space -> Space -> Coord -> Maybe Coord
+nextMove space inrange src = case nearest space src inrange of
+    Nothing -> Nothing
+    Just (target, dist) -> moveTo where
+        maybeAdj = trace ("  Chose target " ++ show target ++ " at distance " ++
+            show dist) $ nearest space target $ adjacent space src
+        moveTo = fst <$> maybeAdj
+
+move :: Game -> Unit -> Coord -> Unit
+move game unit to =
+    let possibleMoves = adjacent (openSquares game) (pos_ unit)
+     in assert (to `Set.member` possibleMoves) unit { pos_ = to }
+ 
+nearEnemy :: Game -> Unit -> Maybe Unit
+nearEnemy (Game space units) unit = chooseWeakest adjacentEnemies where
         enemies' = enemies units unit
         adjacent' = adjacent space $ pos_ unit
         adjacentEnemies = Map.restrictKeys enemies' adjacent'
-        chooseFirst = listToMaybe . Map.elems
+        chooseWeakest = listToMaybe . sortOn weakest . Map.elems
+        weakest enemy = (hp_ enemy, pos_ enemy)
 
-turn :: Game -> Unit -> Units
+attack :: Unit -> Unit -> Unit
+attack attacker victim = victim { hp_ = hp_ victim - ap_ attacker }
+
+turn :: Game -> Unit -> (Units, Unit)
 turn = phase1
 
-phase1 :: Game -> Unit -> Units -- Are there any enemies?
+phase1 :: Game -> Unit -> (Units, Unit) -- Are there any enemies?
 phase1 (Game space units) unit
-    | not $ hasEnemies units unit = units -- no enemies, combat has ended
-    | otherwise = units''' where -- lift unit from board while doing its turn
-        units' = Map.delete (pos_ unit) units
+    | not $ hasEnemies units unit = (units, unit) -- no enemies, end of combat
+    | otherwise = (units''', unit') where -- lift unit from board while in turn
+        units' = trace (show unit) $ Map.delete (pos_ unit) units
         (units'', unit') = phase2 (Game space units') unit
-        units''' = Map.insert (pos_ unit') unit' units''
+        units''' = Map.insert (pos_ unit') unit' units'' -- place back on board
 
 phase2 :: Game -> Unit -> (Units, Unit) -- Are there any target squares?
 phase2 game@(Game _ units) unit =
@@ -150,48 +150,66 @@ phase2 game@(Game _ units) unit =
         else phase3 game unit inrange
 
 phase3 :: Game -> Unit -> Space -> (Units, Unit) -- Do we need to move?
-phase3 game@(Game space units) unit inrange
-    | pos_ unit `Set.member` inrange = phase9 game unit -- already in range
+phase3 game unit inrange
+    | pos_ unit `Set.member` inrange = phase5 game unit -- already in range
     | otherwise = phase4 game unit inrange -- need to move
 
 phase4 :: Game -> Unit -> Space -> (Units, Unit) -- Figure out where to move
-phase4 game@(Game space units) unit inrange =
-    let avail = trace ("4. Finding path from " ++ show unit ++ " to " ++ show inrange) $ available game
-        moveTo' = findPath avail inrange (pos_ unit)
-        moveTo = trace ("  Found: " ++ show moveTo') moveTo'
-    in maybe (units, unit) (phase5 game unit) moveTo
+phase4 game@(Game _ units) unit inrange =
+    let moveTo' = nextMove (openSquares game) inrange (pos_ unit)
+        moveTo = trace (" Move " ++ show unit ++ " -> " ++ show moveTo') moveTo'
+    in maybe (trace " No move found" (units, unit)) (phase5 game . move game unit) moveTo
 
-phase5 :: Game -> Unit -> Coord -> (Units, Unit) -- move one step
-phase5 game@(Game space units) unit pos = trace ("5. Moving " ++  show unit ++ " to " ++ show pos) $ phase6 game unit' where
-    avail = available game
-    unit' = assert (pos `Set.member` adjacent avail (pos_ unit)) unit { pos_ = pos }
+phase5 :: Game -> Unit -> (Units, Unit) -- Can we attack?
+phase5 game@(Game _ units) unit =
+    case nearEnemy game unit of
+      Nothing -> (units, unit) -- no enemy to attack
+      Just victim -> trace (" Attacking " ++ show victim) $ phase6 game unit (attack unit victim)
 
-phase6 :: Game -> Unit -> (Units, Unit) -- attack?
-phase6 game@(Game space units) unit = (units, unit)
-
-phase9 :: Game -> Unit -> (Units, Unit)
-phase9 game unit = (units_ game, unit)
+phase6 :: Game -> Unit -> Unit -> (Units, Unit) -- Dead?
+phase6 (Game _ units) unit victim
+    | hp_ victim <= 0 = trace (" Died: " ++ show victim) (Map.delete (pos_ victim) units, unit)
+    | otherwise = (Map.insert (pos_ victim) victim units, unit)
 
 oneRound :: Game -> Game
-oneRound (Game space units) =
-    Game space (Map.foldl perUnit units units) where
-        perUnit units' = turn (Game space units')
+oneRound (Game space units) = Game space units''' where
+    units''' = fst (foldl perUnit (units, []) $ Map.keys units)
+    perUnit (units', skip) pos
+        | pos `elem` skip = (units', skip) -- a unit moved into this square
+        | Map.notMember pos units' = (units', skip) -- this unit has died
+        | otherwise = (units'', pos_ unit : skip) where
+            (units'', unit) = turn (Game space units') (units' Map.! pos)
+
+untilCombatEnd :: Game -> Int -> (Game, Int)
+untilCombatEnd game rounds
+    | length (kindsLeft game) <= 1 = (game, rounds)
+    | otherwise = untilCombatEnd (oneRound game) (rounds + 1)
 
 initGame :: Int -> IO Game
 initGame elfAttack = do
     input <- readFile "15.input"
     return $ parse elfAttack input
 
-smallGame :: IO Game
-smallGame = do
-    input <- readFile "15.small.input"
-    return $ parse 3 input
+elvesOnSteroids :: Int -> IO (Int, Game, Int)
+elvesOnSteroids elfAttack = do
+    game <- initGame elfAttack
+    let elfCount g = length $ filter (==Elf) $ map kind_ $ Map.elems $ units_ g
+    let before = elfCount game
+    let (end, rounds) = untilCombatEnd game 0
+    let after = elfCount end
+    if before == after
+       then return (elfAttack, end, rounds)
+       else elvesOnSteroids (elfAttack + 1)
 
 main :: IO ()
 main = do
     -- part 1
     game <- initGame 3
-    print '0'
     putStr $ render game
-    print '1'
-    putStr $ render $ oneRound game
+    let (end, rounds) = untilCombatEnd game 0
+    putStr $ render end
+    print ((rounds - 1) * sum(map hp_ $ Map.elems $ units_ end))
+    -- part 2
+    (_, end', rounds') <- elvesOnSteroids 4
+    putStr $ render end'
+    print ((rounds' - 1) * sum(map hp_ $ Map.elems $ units_ end'))
