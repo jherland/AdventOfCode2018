@@ -2,6 +2,9 @@ module Utils where
 
 import Control.Applicative ((<|>))
 import Data.Char (isDigit)
+import Data.Maybe (fromMaybe)
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Text.ParserCombinators.ReadP
 
@@ -14,6 +17,13 @@ boundingBox :: [Coord] -> Bounds
 boundingBox (p:ps) = foldr minmax (p, p) ps where
     minmax (x, y) ((xmin, ymin), (xmax, ymax)) =
         ((min xmin x, min ymin y), (max xmax x, max ymax y))
+
+renderMap :: Map Coord Char -> Char -> String
+renderMap coords bg =
+    unlines $ map renderLine [ymin -1 .. ymax + 1] where
+        ((ymin, xmin), (ymax, xmax)) = boundingBox $ Map.keys coords
+        renderLine y = map (renderPos y) [xmin - 1 .. xmax + 1]
+        renderPos y x = fromMaybe bg $ coords Map.!? (y, x)
 
 coordsWithin :: Bounds -> [Coord] -- Generate all coords within a bounding box
 coordsWithin ((xmin, ymin), (xmax, ymax)) =
