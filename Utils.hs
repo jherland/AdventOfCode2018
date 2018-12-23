@@ -18,6 +18,10 @@ boundingBox (p:ps) = foldr minmax (p, p) ps where
     minmax (x, y) ((xmin, ymin), (xmax, ymax)) =
         ((min xmin x, min ymin y), (max xmax x, max ymax y))
 
+inside :: Bounds -> Coord -> Bool
+inside ((xmin, ymin), (xmax, ymax)) (x, y) =
+    xmin <= x && x <= xmax && ymin <= y && y <= ymax
+
 renderMap :: Map Coord Char -> Char -> String
 renderMap coords bg =
     unlines $ map renderLine [ymin -1 .. ymax + 1] where
