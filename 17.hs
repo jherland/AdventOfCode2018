@@ -2,26 +2,16 @@
 -- stack --resolver lts-12.10 script --package containers
 
 {-# OPTIONS_GHC -Wall #-}
--- {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TupleSections #-}
 
--- import Data.Bits ((.&.), (.|.))
--- import Data.Bool (bool)
--- import qualified Data.IntMap.Strict as IM
--- import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Text.ParserCombinators.ReadP
--- import Text.Read (readMaybe)
 import Utils
-import Debug.Trace
 
 type Clay = Set Coord -- (y, x)
 type Flow = Set Coord
-
-debug :: String -> a -> a
--- debug = trace
-debug _ a = a
 
 clayVeins :: ReadP [Coord]
 clayVeins = do
@@ -47,75 +37,65 @@ left (y, x) = (y, x - 1)
 right :: Coord -> Coord
 right (y, x) = (y, x + 1)
 
-goLeft :: Clay -> Coord -> Flow -> (Flow, Bool)
-goLeft clay cur right_ =
-    let stopped = cur `Set.member` debug (show cur ++ "> <<<") (Set.union clay right_)
-        here = Set.insert cur right_
-        (below, dbu) = fall clay (down cur) $ debug (show cur ++ "| <<< -> vvv start falling") here
-        (left_, lbu) = goLeft clay (left cur) $ debug (show cur ++ "| <<< -> <<< keep spreading") here
-     in if stopped then debug (show cur ++ "< *<* nope!") (right_, True) else
-        if not dbu then debug (show cur ++ "< vvv whee!") (below, False) else
-        debug (show cur ++ "< ||| keep flowing") (left_, lbu)
+findPool :: Coord -> Clay -> Flow -> [Coord]
+findPool cur clay wflow
+    | cur `Set.notMember` wflow = []
+    | left cur `Set.notMember` clay = findPool (left cur) clay wflow
+    | otherwise = go cur [] where
+        go c found
+            | c `Set.notMember` wflow = []
+            | right c `Set.notMember` clay = go (right c) (c : found)
+            | otherwise = c : found
 
-goRight :: Clay -> Coord -> Flow -> (Flow, Bool)
-goRight clay cur left_ =
-    let stopped = cur `Set.member` debug (show cur ++ "> >>>") (Set.union clay left_)
-        here = Set.insert cur left_
-        (below, dbu) = fall clay (down cur) $ debug (show cur ++ "| >>> -> vvv start falling") here
-        (right_, rbu) = goRight clay (right cur) $ debug (show cur ++ "| >>> -> >>> keep spreading") here
-     in if stopped then debug (show cur ++ "< *>* nope!") (left_, True) else
-        if not dbu then debug (show cur ++ "< vvv whee!") (below, False) else
-        debug (show cur ++ "< ||| keep flowing") (right_, rbu)
+findAbove :: [Coord] -> Flow -> [Coord]
+findAbove pool wflow = filter (`Set.member` wflow) $ map up pool
 
-fall :: Clay -> Coord -> Flow -> (Flow, Bool)
-fall clay cur above =
-    let (_, (ymax, _)) = boundingBox $ Set.toList clay
-        finished = fst cur > ymax
-        stopped = cur `Set.member` debug (show cur ++ "> vvv") (Set.union clay above)
-        here = Set.insert cur above
-        (below, dbu) = fall clay (down cur) $ debug (show cur ++ "| vvv -> vvv keep falling") here
-        (left_, lbu) = goLeft clay (left cur) $ debug (show cur ++ "| vvv -> <<< spread left") below
-        (right_, rbu) = goRight clay (right cur) $ debug (show cur ++ "| vvv -> >>> spread right") left_
-     in if finished then debug (show cur ++ "< *** finished!") (above, False) else
-        if stopped then debug (show cur ++ "< *v* nope!") (above, True) else
-        if not dbu then debug (show cur ++ "< ||| no splashback") (below, False) else
-        if lbu && rbu then debug (show cur ++ "< >|< backing up") (right_, True) else
-        debug (show cur ++ "< ||| flowing left+right") (right_, False)
-
-flow :: Clay -> [Coord] -> Flow
-flow clay queue = go queue Set.empty where
-    go [] seen  = seen
-    go (cur : q) seen =
-        let (_, (ymax, _)) = boundingBox $ Set.toList clay
-            finished  = (fst cur > ymax) || cur `Set.member` seen
-            free c = c `Set.notMember` Set.union clay seen
-            d = down cur
-            l = left cur
-            r = right cur
-            seen' = Set.insert cur seen
-            fall = go (d : q) seen'
-            q'
-                | free l && free r = (l : r : q)
-                | free l = (l : q)
-                | free r = (r : q)
-                | otherwise = q
-         in if finished then debug (show cur ++ ": *** finished") $ go q seen else
-            if free (down cur) then debug (show cur ++ ": vvv fall") fall else
-            debug (show cur ++ ": <|> spread") $ go q' seen'
+flow :: Clay -> [(Coord, Bool)] -> (Flow, Flow)
+flow clay queue = go queue (Set.empty, Set.empty) where
+    (_, (ymax, _)) = boundingBox $ Set.toList clay
+    go [] results = results
+    go ((cur, rwd) : q) (wflow, wpool) =
+        let finished  = (fst cur > ymax) || cur `Set.member` wpool
+            s = down cur
+            w = left cur
+            e = right cur
+            wflow' = Set.insert cur wflow
+         in if finished then go q (wflow, wpool) else
+            if not rwd then -- forward flow
+                if s `Set.notMember` Set.union clay wpool then
+                    if s `Set.notMember` wflow then
+                        go ((s, False) : q) (wflow', wpool)
+                    else go q (wflow', wpool)
+                else -- clay or pool below, spread sideways
+                    let lq
+                            | w `Set.member` clay = ((cur, True) : q)
+                            | w `Set.notMember` wflow = ((w, False) : q)
+                            | otherwise = q
+                        rq
+                            | e `Set.member` clay = ((cur, True) : lq)
+                            | e `Set.notMember` wflow = ((e, False) : lq)
+                            | otherwise = lq
+                     in go rq (wflow', wpool)
+            else -- reverse flow
+                let pool = findPool cur clay wflow
+                    above = findAbove pool wflow
+                    wpool' = Set.union wpool $ Set.fromList pool
+                    q' = map (, False) above ++ q
+                 in go q' (wflow, wpool')
 
 main :: IO ()
 main = do
-    input <- readFile "17.small.input"
+    input <- readFile "17.input"
     let clay = Set.fromList $ concat $ parseMany clayVeins $ lines input
     let spring = (0, 500)
-    putStr $ renderMap (Map.insert spring '+' $ Map.fromSet (const '#') clay) ' '
-    let water = flow clay [spring]
-    putStr $ renderMap (
-        Map.insert spring '+' $
-        Map.union
-            (Map.fromSet (const '|') water)
-            (Map.fromSet (const '#') clay)
-        ) ' '
-
+    let start = (fst (fst (boundingBox (Set.toList clay))), snd spring)
+    let (wflow, wpool) = flow clay [(start, False)]
+    putStr $ renderMap (Map.insert spring '+' $
+                        Map.union (Map.union (Map.fromSet (const '~') wpool)
+                                             (Map.fromSet (const '|') wflow))
+                                  (Map.fromSet (const '#') clay))
+                       ' '
     -- part 1
-    print $ Set.size water
+    print $ Set.size wflow
+    -- part 2
+    print $ Set.size wpool
