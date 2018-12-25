@@ -95,44 +95,44 @@ class Reservoir:
                 continue
             if not rwd:  # forward flow
                 self.wflow.add(cur)
-                d, l, r = down(cur), left(cur), right(cur)
-                if d not in self.clay | self.wpool:  # no 'floor'
-                    if d not in self.wflow:
-                        debug('{}: vvv -> {}'.format(cur, d))
-                        queue.append((d, False))
+                s, w, e = down(cur), left(cur), right(cur)
+                if s not in self.clay | self.wpool:  # no 'floor'
+                    if s not in self.wflow:
+                        debug('{}: vvv -> {}'.format(cur, s))
+                        queue.append((s, False))
                 else:  # clay or pool below, spread sideways
                     # leftwards
-                    if l in self.clay:  # run into wall
+                    if w in self.clay:  # run into wall
                         debug('{}: |<< -> {}!'.format(cur, cur))
                         queue.append((cur, True))  # back up
-                    elif l not in self.wflow:  # can flow here
-                        debug('{}: <<< -> {}'.format(cur, l))
-                        queue.append((l, False))
+                    elif w not in self.wflow:  # can flow here
+                        debug('{}: <<< -> {}'.format(cur, w))
+                        queue.append((w, False))
                     # rightwards
-                    if r in self.clay:
+                    if e in self.clay:
                         debug('{}: >>| -> {}!'.format(cur, cur))
                         queue.append((cur, True))  # back up
-                    elif r not in self.wflow:  # can flow here
-                        debug('{}: >>> -> {}'.format(cur, r))
-                        queue.append((r, False))
+                    elif e not in self.wflow:  # can flow here
+                        debug('{}: >>> -> {}'.format(cur, e))
+                        queue.append((e, False))
             else:  # reverse flow
                 assert cur in self.wflow  # forward flow was already here
                 pool = {cur}
-                l, r = left(cur), right(cur)
-                while l in self.wflow:
-                    pool.add(l)
-                    l = left(l)
-                while r in self.wflow:
-                    pool.add(r)
-                    r = right(r)
-                if l in self.clay and r in self.clay:  # walls around pool
-                    debug('Found pool between {} and {}'.format(l, r))
+                w, e = left(cur), right(cur)
+                while w in self.wflow:
+                    pool.add(w)
+                    w = left(w)
+                while e in self.wflow:
+                    pool.add(e)
+                    e = right(e)
+                if w in self.clay and e in self.clay:  # walls around pool
+                    debug('Found pool between {} and {}'.format(w, e))
                     for p in pool:
                         self.wpool.add(p)
-                        u = up(p)
-                        if u in self.wflow:
-                            debug('Found source at {}'.format(u))
-                            queue.append((u, False))  # rise to level above
+                        n = up(p)
+                        if n in self.wflow:
+                            debug('Found source at {}'.format(n))
+                            queue.append((n, False))  # rise to level above
 
 
 if __name__ == '__main__':
